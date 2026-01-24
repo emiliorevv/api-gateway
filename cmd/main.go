@@ -2,14 +2,22 @@ package main
 
 import (
 	"log"
-	"net"
 	"net/http"
-	"strings"
 
 	"github.com/emiliorevv/api-gateway/internal/limiter"
 	"github.com/emiliorevv/api-gateway/internal/mock"
 	"github.com/emiliorevv/api-gateway/internal/proxy"
 )
+
+type clientConfig struct {
+	Limit int
+	Rate float64
+}
+
+var clientsInDB = map[string]clientConfig{
+	"free-membership-token": {Limit: 5, Rate: 0.5},
+	"paid-membership-token": {Limit: 10, Rate: 5.0},
+}
 
 func main() {
 
@@ -25,7 +33,7 @@ func main() {
 		}
 	}()
 
-	rateLimiter := limiter.NewRateLimiter(rdb, 10, 1.0)
+	rateLimiter := limiter.NewRateLimiter(rdb)
 	log.Println("Rate limiter initialized")
 
 
@@ -40,12 +48,15 @@ func main() {
 
 
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			ip = strings.Split(r.RemoteAddr, ":")[0]
+		apiKey := r.Header.Get("X-Api-Key")
+
+		config, exists := clientsInDB[apiKey]
+		if !exists {
+			log.Println("Client not found in database", http.StatusUnauthorized)
+			return
 		}
 
-		allow, err := rateLimiter.Allow(r.Context(), ip)
+		allow, err := rateLimiter.Allow(r.Context(), apiKey, config.Limit, config.Rate)
 
 		if err != nil{
 			log.Printf("Error on rate limiter: %v", err)
@@ -57,7 +68,7 @@ func main() {
 			http.Error(w, "Many petitions", http.StatusTooManyRequests)
 			return
 		}
-
+		log.Printf("Allowed rate limiter for api key: %s", apiKey)
 		proxyHandler.ServeHTTP(w,r)
 	})
 

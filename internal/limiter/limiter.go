@@ -37,26 +37,22 @@ return 1 -- True (Accepted)
 
 type RateLimiter struct {
 	client   *redis.Client
-	capacity int
-	rate     float64
 
 
 }
 
-func NewRateLimiter(client *redis.Client, capacity int, rate float64) *RateLimiter {
+func NewRateLimiter(client *redis.Client) *RateLimiter {
 	return &RateLimiter{
 		client:   client,
-		capacity: capacity,
-		rate:     rate,
 	}
 }
 
-func (rl *RateLimiter) Allow(ctx context.Context, ip string) (bool, error) {
-	key := fmt.Sprintf("rate_limit_%s", ip)
+func (rl *RateLimiter) Allow(ctx context.Context, key string, limit int, rate float64 ) (bool, error) {
+	redisKey := fmt.Sprintf("rate_limit_%s", key)
 
 	now := time.Now().Unix()
 
-	result, err := rl.client.Eval(ctx, tokenBucketScript, []string{key}, rl.capacity, rl.rate, now, 1).Result()
+	result, err := rl.client.Eval(ctx, tokenBucketScript, []string{redisKey}, limit, rate, now, 1).Result()
 
 	if err != nil {
 		return false, fmt.Errorf("error executing lua script: %w", err)
