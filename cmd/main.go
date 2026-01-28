@@ -3,6 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+
+	"github.com/joho/godotenv"
 
 	"github.com/emiliorevv/api-gateway/internal/limiter"
 	"github.com/emiliorevv/api-gateway/internal/mock"
@@ -21,7 +24,22 @@ var clientsInDB = map[string]clientConfig{
 
 func main() {
 
-	rdb, err := limiter.NewRedisClient("localhost:6379")
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Error loading .env file")
+	}
+
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+
+	port:= os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+
+	rdb, err := limiter.NewRedisClient(redisAddr)
 	if err != nil {
 		log.Fatal("Redis connection error: ", err)
 	}
@@ -74,7 +92,6 @@ func main() {
 
 	http.Handle("/", finalHandler)
 
-	const port = ":8080"
 	log.Printf("Listening on port %s", port)
 
 	if err := http.ListenAndServe(port, nil); err != nil {
