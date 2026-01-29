@@ -6,10 +6,12 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/emiliorevv/api-gateway/internal/limiter"
 	"github.com/emiliorevv/api-gateway/internal/mock"
 	"github.com/emiliorevv/api-gateway/internal/proxy"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type clientConfig struct {
@@ -20,6 +22,17 @@ type clientConfig struct {
 var clientsInDB = map[string]clientConfig{
 	"free-membership-token": {Limit: 5, Rate: 0.5},
 	"paid-membership-token": {Limit: 10, Rate: 5.0},
+}
+
+var (
+	httpRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "api-gateway-requestsTotal",
+		Help: "Requests processed by the Gateway",
+	}, []string {"status"})
+)
+
+func init() {
+	prometheus.MustRegister(httpRequestsTotal)
 }
 
 func main() {
@@ -70,29 +83,36 @@ func main() {
 
 		config, exists := clientsInDB[apiKey]
 		if !exists {
-			//log.Println("Client not found in database", http.StatusUnauthorized)
+			log.Println("Client not found in database", http.StatusUnauthorized)
 			return
 		}
 
 		allow, err := rateLimiter.Allow(r.Context(), apiKey, config.Limit, config.Rate)
 
 		if err != nil{
-			//log.Printf("Error on rate limiter: %v", err)
+			log.Printf("Error on rate limiter: %v", err)
 			proxyHandler.ServeHTTP(w, r)
 			return
 		}
 
 		if !allow{
+
+			httpRequestsTotal.WithLabelValues("blocked-requests").Inc()
+
 			http.Error(w, "Many petitions", http.StatusTooManyRequests)
 			return
 		}
-		//log.Printf("Allowed rate limiter for api key: %s", apiKey)
+
+		httpRequestsTotal.WithLabelValues("accepted-requests").Inc()
+		log.Printf("Allowed rate limiter for api key: %s", apiKey)
 		proxyHandler.ServeHTTP(w,r)
 	})
 
 	http.Handle("/", finalHandler)
 
-	//log.Printf("Listening on port %s", port)
+	http.Handle("/metrics", promhttp.Handler())
+
+	log.Printf("Listening on port %s", port)
 
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatal(err)
