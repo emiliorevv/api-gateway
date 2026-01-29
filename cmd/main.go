@@ -61,7 +61,7 @@ func main() {
 
 	proxyHandler, err := proxy.NewReverseProxy(backendURL)
 	if err != nil {
-		log.Fatal("proxy couldn't be created: ", err)
+	log.Fatal("proxy couldn't be created: ", err)
 	}
 
 
@@ -70,14 +70,14 @@ func main() {
 
 		config, exists := clientsInDB[apiKey]
 		if !exists {
-			log.Println("Client not found in database", http.StatusUnauthorized)
+			//log.Println("Client not found in database", http.StatusUnauthorized)
 			return
 		}
 
 		allow, err := rateLimiter.Allow(r.Context(), apiKey, config.Limit, config.Rate)
 
 		if err != nil{
-			log.Printf("Error on rate limiter: %v", err)
+			//log.Printf("Error on rate limiter: %v", err)
 			proxyHandler.ServeHTTP(w, r)
 			return
 		}
@@ -86,13 +86,13 @@ func main() {
 			http.Error(w, "Many petitions", http.StatusTooManyRequests)
 			return
 		}
-		log.Printf("Allowed rate limiter for api key: %s", apiKey)
+		//log.Printf("Allowed rate limiter for api key: %s", apiKey)
 		proxyHandler.ServeHTTP(w,r)
 	})
 
 	http.Handle("/", finalHandler)
 
-	log.Printf("Listening on port %s", port)
+	//log.Printf("Listening on port %s", port)
 
 	if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatal(err)
