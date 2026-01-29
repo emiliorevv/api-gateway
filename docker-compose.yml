@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  go-api-gateway:
+    build: .
+    container_name: gateway-golang
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_ADDR=redis:6379
+      - PORT=:8080
+  redis:
+    image: redis:alpine
+    container_name: redis_db
+    ports:
+      - "6379:6379"
